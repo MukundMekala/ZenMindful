@@ -72,6 +72,14 @@ const quickResponses = [
   },
 ];
 
+// Extend Window interface for speech recognition
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 export default function Chat() {
   const [message, setMessage] = useState("");
   const [selectedLanguage, setSelectedLanguage] = useState("en");

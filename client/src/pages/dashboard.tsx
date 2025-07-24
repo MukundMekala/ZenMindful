@@ -30,7 +30,8 @@ export default function Dashboard() {
 
   const moodMutation = useMutation({
     mutationFn: async (moodData: { mood: string; emoji: string; rating: number }) => {
-      return apiRequest("POST", "/api/mood", moodData);
+      const response = await apiRequest("POST", "/api/mood", moodData);
+      return response.json();
     },
     onSuccess: () => {
       // Force immediate refresh of mood data for real-time updates

@@ -46,11 +46,19 @@ function Router() {
       }
     },
     onSuccess: (data: any) => {
-      if (data.success && data.userId) {
+      const response = data instanceof Response ? data : data;
+      if (response && typeof response.json === 'function') {
+        response.json().then((jsonData: any) => {
+          if (jsonData.success && jsonData.userId) {
+            localStorage.setItem('mindease_user_id', jsonData.userId);
+            console.log('User session established:', jsonData.userId);
+            queryClient.invalidateQueries();
+          }
+        });
+      } else if (data && data.success && data.userId) {
         // Ensure userId is stored in localStorage
         localStorage.setItem('mindease_user_id', data.userId);
         console.log('User session established:', data.userId);
-        
         // Force cache invalidation to refresh all queries with new auth
         queryClient.invalidateQueries();
       }

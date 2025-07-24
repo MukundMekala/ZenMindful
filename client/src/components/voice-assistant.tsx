@@ -10,6 +10,14 @@ interface VoiceAssistantProps {
   currentMood?: string;
 }
 
+// Extend Window interface for speech recognition
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 export default function VoiceAssistant({ currentMood }: VoiceAssistantProps) {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);

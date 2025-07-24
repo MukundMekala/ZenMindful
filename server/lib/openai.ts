@@ -1,6 +1,17 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// Initialize Gemini AI with fallback
+let genAI: GoogleGenerativeAI | null = null;
+
+try {
+  if (process.env.GEMINI_API_KEY) {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  } else {
+    console.warn('GEMINI_API_KEY not found. AI features will use fallbacks.');
+  }
+} catch (error) {
+  console.error('Failed to initialize Gemini AI:', error);
+}
 
 export async function analyzeImageAndGenerateMeme(imageBuffer: Buffer, style: string): Promise<{
   topText: string;
@@ -8,6 +19,10 @@ export async function analyzeImageAndGenerateMeme(imageBuffer: Buffer, style: st
   description: string;
 }> {
   try {
+    if (!genAI) {
+      throw new Error('AI service not available');
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const imagePart = {
@@ -84,6 +99,10 @@ Return your response in this exact JSON format:
 // Enhanced multilingual AI response generation with automatic language detection
 export async function generateAIResponse(userMessage: string, currentMood?: string, preferredLanguage?: string): Promise<string> {
   try {
+    if (!genAI) {
+      return getFallbackResponse(userMessage, currentMood, preferredLanguage);
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     // Enhanced multilingual system prompt with comprehensive Indian language support
@@ -132,8 +151,40 @@ export async function generateAIResponse(userMessage: string, currentMood?: stri
     return response.text() || "I'm here to support you. Could you tell me more about how you're feeling?";
   } catch (error) {
     console.error("Gemini API error:", error);
-    return "I'm having trouble connecting right now, but I'm here for you. How can I help support your wellness today?";
+    return getFallbackResponse(userMessage, currentMood, preferredLanguage);
   }
+}
+
+function getFallbackResponse(userMessage: string, currentMood?: string, preferredLanguage?: string): string {
+  const responses = {
+    en: {
+      greeting: "Hello! I'm here to support your wellness journey. How are you feeling today?",
+      anxious: "I understand you're feeling anxious. Try taking three deep breaths with me. Breathe in for 4 counts, hold for 4, and exhale for 6.",
+      sad: "I hear that you're going through a difficult time. Your feelings are valid, and you're not alone in this.",
+      happy: "It's wonderful to hear the positivity in your message! What's bringing you joy today?",
+      default: "I'm here to listen and support you. What's on your mind today?"
+    },
+    hi: {
+      greeting: "नमस्ते! मैं आपकी कल्याण यात्रा में सहायता के लिए यहाँ हूँ। आज आप कैसा महसूस कर रहे हैं?",
+      anxious: "मैं समझ सकता हूँ कि आप चिंतित महसूस कर रहे हैं। मेरे साथ तीन गहरी सांसें लें।",
+      sad: "मैं समझ सकता हूँ कि आप कठिन समय से गुजर रहे हैं। आपकी भावनाएं वैध हैं।",
+      happy: "आपके संदेश में खुशी देखकर बहुत अच्छा लगा! आज आपको क्या खुशी दे रहा है?",
+      default: "मैं आपकी बात सुनने और सहायता करने के लिए यहाँ हूँ। आज आपके मन में क्या है?"
+    }
+  };
+
+  const lang = preferredLanguage || 'en';
+  const langResponses = responses[lang as keyof typeof responses] || responses.en;
+  
+  if (currentMood) {
+    return langResponses[currentMood as keyof typeof langResponses] || langResponses.default;
+  }
+  
+  if (userMessage.toLowerCase().includes('hello') || userMessage.toLowerCase().includes('hi')) {
+    return langResponses.greeting;
+  }
+  
+  return langResponses.default;
 }
 
 export async function analyzeMoodFromText(text: string): Promise<{
@@ -143,6 +194,10 @@ export async function analyzeMoodFromText(text: string): Promise<{
   confidence: number;
 }> {
   try {
+    if (!genAI) {
+      return analyzeMoodFallback(text);
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const prompt = `Analyze the emotional tone of the text and determine the primary mood. 
@@ -174,17 +229,39 @@ export async function analyzeMoodFromText(text: string): Promise<{
     };
   } catch (error) {
     console.error("Mood analysis error:", error);
-    return {
-      mood: "calm",
-      emoji: "😌",
-      rating: 3,
-      confidence: 0.5,
-    };
+    return analyzeMoodFallback(text);
   }
+}
+
+function analyzeMoodFallback(text: string): { mood: string; emoji: string; rating: number; confidence: number } {
+  const lowerText = text.toLowerCase();
+  
+  // Simple keyword-based mood detection
+  if (lowerText.includes('happy') || lowerText.includes('joy') || lowerText.includes('great') || lowerText.includes('wonderful')) {
+    return { mood: "happy", emoji: "😊", rating: 4, confidence: 0.7 };
+  }
+  if (lowerText.includes('sad') || lowerText.includes('down') || lowerText.includes('depressed') || lowerText.includes('upset')) {
+    return { mood: "sad", emoji: "😢", rating: 2, confidence: 0.7 };
+  }
+  if (lowerText.includes('anxious') || lowerText.includes('worried') || lowerText.includes('nervous') || lowerText.includes('stress')) {
+    return { mood: "anxious", emoji: "😰", rating: 2, confidence: 0.7 };
+  }
+  if (lowerText.includes('excited') || lowerText.includes('amazing') || lowerText.includes('fantastic')) {
+    return { mood: "excited", emoji: "🤗", rating: 5, confidence: 0.7 };
+  }
+  if (lowerText.includes('calm') || lowerText.includes('peaceful') || lowerText.includes('relaxed')) {
+    return { mood: "calm", emoji: "😌", rating: 4, confidence: 0.7 };
+  }
+  
+  return { mood: "calm", emoji: "😌", rating: 3, confidence: 0.5 };
 }
 
 export async function generateMoodInsights(moodEntries: any[]): Promise<string[]> {
   try {
+    if (!genAI) {
+      return generateInsightsFallback(moodEntries);
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     if (moodEntries.length === 0) {
@@ -252,14 +329,44 @@ Keep insights supportive, specific to the data, and encouraging.`;
     ];
   } catch (error) {
     console.error("Insights generation error:", error);
-    return [
-      "Keep tracking your mood to understand patterns better",
-      "Multiple daily entries show excellent self-awareness",
-      "Consider what activities help improve your mood"
-    ];
+    return generateInsightsFallback(moodEntries);
   }
 }
 
+function generateInsightsFallback(moodEntries: any[]): string[] {
+  if (moodEntries.length === 0) {
+    return [
+      "Start tracking your mood daily to identify patterns",
+      "Regular mood monitoring helps build emotional awareness",
+      "Consider setting a daily reminder to check in with yourself"
+    ];
+  }
+  
+  const recentMoods = moodEntries.slice(0, 7);
+  const moodCounts = recentMoods.reduce((acc: any, entry) => {
+    acc[entry.mood] = (acc[entry.mood] || 0) + 1;
+    return acc;
+  }, {});
+  
+  const insights = [];
+  
+  if (moodEntries.length >= 7) {
+    insights.push("Great job maintaining a consistent mood tracking habit!");
+  }
+  
+  const dominantMood = Object.entries(moodCounts).reduce((a: any, b: any) => a[1] > b[1] ? a : b)[0];
+  insights.push(`Your most frequent mood this week has been ${dominantMood}.`);
+  
+  if (moodCounts.happy || moodCounts.excited) {
+    insights.push("You've had some positive moments recently - that's wonderful to see!");
+  }
+  
+  if (moodCounts.anxious || moodCounts.sad) {
+    insights.push("Consider using the breathing exercises when you notice difficult emotions.");
+  }
+  
+  return insights.slice(0, 4);
+}
 export async function generateMemeText(memoryTitle: string, memoryCategory: string, style: string): Promise<{
   topText: string;
   bottomText: string;
@@ -308,6 +415,10 @@ export async function generateMemeText(memoryTitle: string, memoryCategory: stri
 
 export async function generateDailyWellnessTip(userContext?: any): Promise<string> {
   try {
+    if (!genAI) {
+      return getDailyTipFallback();
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
@@ -331,8 +442,23 @@ export async function generateDailyWellnessTip(userContext?: any): Promise<strin
     return response.text().trim() || "Take a moment today to practice deep breathing. Even three mindful breaths can help center your thoughts and reduce stress.";
   } catch (error) {
     console.error("Daily tip generation error:", error);
-    throw error;
+    return getDailyTipFallback();
   }
+}
+
+function getDailyTipFallback(): string {
+  const tips = [
+    "Take three deep breaths before checking your phone in the morning. This simple practice helps center your mind for the day ahead.",
+    "Practice the 5-4-3-2-1 grounding technique when feeling overwhelmed: Notice 5 things you see, 4 things you can touch, 3 things you hear, 2 things you smell, and 1 thing you taste.",
+    "Set aside 10 minutes today for mindful breathing. Even brief moments of focused breathing can significantly reduce stress and anxiety.",
+    "Write down three things you're grateful for today. Gratitude practice has been shown to improve mood and overall well-being.",
+    "Take a 5-minute walk outside without any distractions. Fresh air and movement can help clear your mind and reset your energy.",
+    "Practice self-compassion by speaking to yourself as you would to a dear friend. Be kind and understanding with your inner dialogue.",
+    "Try the 'STOP' technique when stressed: Stop what you're doing, Take a breath, Observe your thoughts and feelings, Proceed mindfully."
+  ];
+  
+  const today = new Date().getDate();
+  return tips[today % tips.length];
 }
 
 export async function analyzeImageForMemory(base64Image: string): Promise<{
@@ -503,6 +629,10 @@ export async function generatePersonalizedInsights(userActivity: {
   userProfile: any;
 }): Promise<string[]> {
   try {
+    if (!genAI) {
+      return generatePersonalizedInsightsFallback(userActivity);
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const { moodEntries, memories, chatMessages, gratitudeEntries, userProfile } = userActivity;
@@ -565,18 +695,53 @@ Respond with JSON: { "insights": ["insight1", "insight2", "insight3", "insight4"
     ];
   } catch (error) {
     console.error('Error generating personalized insights:', error);
+    return generatePersonalizedInsightsFallback(userActivity);
+  }
+}
+
+function generatePersonalizedInsightsFallback(userActivity: any): string[] {
+  const { moodEntries, memories, chatMessages, gratitudeEntries, userProfile } = userActivity;
+  const insights = [];
+  
+  if (moodEntries.length > 0) {
+    insights.push(`You've logged ${moodEntries.length} mood entries - great job building this healthy habit!`);
+  }
+  
+  if (memories.length > 0) {
+    insights.push(`Your ${memories.length} captured memories show you're actively building positive associations.`);
+  }
+  
+  if (chatMessages.length > 0) {
+    insights.push(`You've engaged in ${Math.floor(chatMessages.length / 2)} conversations with your AI assistant.`);
+  }
+  
+  if (gratitudeEntries.length > 0) {
+    insights.push(`Your gratitude practice with ${gratitudeEntries.length} entries is building a more positive mindset.`);
+  }
+  
+  if (userProfile?.wellnessGoals) {
+    const goals = typeof userProfile.wellnessGoals === 'string' ? 
+      JSON.parse(userProfile.wellnessGoals) : userProfile.wellnessGoals;
+    insights.push(`You're working toward ${goals.length} wellness goals - stay focused on your journey.`);
+  }
+  
+  if (insights.length === 0) {
     return [
-      "Keep exploring the wellness features to track your mental health journey.",
-      "Regular mood tracking helps identify patterns and triggers.",
-      "Capturing positive memories can boost your overall well-being.",
-      "Gratitude practice has been shown to improve mental health.",
-      "AI chat support is available whenever you need guidance."
+      "Welcome to your wellness journey! Start by tracking your mood daily.",
+      "Explore the different features to build healthy mental wellness habits.",
+      "Remember that small, consistent actions lead to meaningful change."
     ];
   }
+  
+  return insights.slice(0, 5);
 }
 
 export async function generatePersonalizedThoughtInterruption(userProfile: any, recentMoods: any[]): Promise<string[]> {
   try {
+    if (!genAI) {
+      return getThoughtInterruptionFallback();
+    }
+    
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     const moodContext = recentMoods.length > 0 ? 
@@ -621,12 +786,16 @@ Respond with JSON: { "techniques": ["technique1", "technique2", "technique3", "t
     ];
   } catch (error) {
     console.error('Error generating personalized thought interruption:', error);
-    return [
-      "Take 5 deep breaths, counting slowly to 4 on each inhale and exhale",
-      "Name 5 things you can see, 4 you can touch, 3 you can hear, 2 you can smell, 1 you can taste",
-      "Repeat a personal affirmation that aligns with your wellness goals",
-      "Do 10 jumping jacks or stretch for 30 seconds to shift your energy",
-      "Write down one thing you're grateful for right now"
-    ];
+    return getThoughtInterruptionFallback();
   }
+}
+
+function getThoughtInterruptionFallback(): string[] {
+  return [
+    "Take 5 deep breaths, counting slowly to 4 on each inhale and exhale",
+    "Name 5 things you can see, 4 you can touch, 3 you can hear, 2 you can smell, 1 you can taste",
+    "Repeat a personal affirmation that aligns with your wellness goals",
+    "Do 10 jumping jacks or stretch for 30 seconds to shift your energy",
+    "Write down one thing you're grateful for right now"
+  ];
 }

@@ -8,6 +8,8 @@ import {
   serial,
   integer,
   boolean,
+  date,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -105,6 +107,17 @@ export const challengeProgress = pgTable("challenge_progress", {
   lastActivityDate: timestamp("last_activity_date"),
   timestamp: timestamp("timestamp").defaultNow(),
 });
+
+export const challengeDailyProgress = pgTable("challenge_daily_progress", {
+  id: serial("id").primaryKey(),
+  challengeId: varchar("challenge_id").notNull(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  completed: boolean("completed").default(false),
+  timestamp: timestamp("timestamp").defaultNow(),
+}, (table) => [
+  unique().on(table.challengeId, table.userId, table.date)
+]);
 
 export const insertMoodEntrySchema = createInsertSchema(moodEntries).omit({
   id: true,

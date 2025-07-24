@@ -38,6 +38,7 @@ export default function Challenges() {
         title: "Challenge started!",
         description: "Good luck on your wellness journey!",
       });
+      setSelectedChallenge(null);
     },
     onError: () => {
       toast({
@@ -383,7 +384,12 @@ export default function Challenges() {
                               </ul>
                             </div>
                             <div className="flex justify-end space-x-2">
-                              <Button variant="outline">Cancel</Button>
+                              <Button 
+                                variant="outline"
+                                onClick={() => setSelectedChallenge(null)}
+                              >
+                                Cancel
+                              </Button>
                               <Button 
                                 onClick={() => joinChallengeMutation.mutate(challenge.id)}
                                 disabled={joinChallengeMutation.isPending}
