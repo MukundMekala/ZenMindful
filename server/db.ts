@@ -8,8 +8,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Strip off sslmode param if needed – pg uses ssl option directly
-const connectionString = process.env.DATABASE_URL.replace('?sslmode=require', '');
-
+const connectionString = process.env.DATABASE_URL;
 console.log("Loaded DB URL:", connectionString);
 
 // Create connection pool with SSL override
